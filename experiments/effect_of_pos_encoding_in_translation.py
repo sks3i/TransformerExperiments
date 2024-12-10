@@ -2,6 +2,11 @@
 This experiment is to test the effect of positional encoding in translation.
 """
 
+import os
+import sys
+# Add the project root directory to Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import argparse
 import math
 import torch
@@ -10,8 +15,10 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 from data.dataset import get_data_loaders
+from data.dataset import TranslationDataCollator
 from model.transformer import TransformerEncoder, TransformerDecoder
 from trainer.trainer import Trainer
+from transformers import PreTrainedTokenizerFast
 
 
 class ExperimentConfig:
@@ -25,14 +32,15 @@ class ExperimentConfig:
         self.norm_order = "post"
 
         # Training
-        self.batch_size = 32
-        self.num_epochs = 100
+        self.batch_size = 136
+        self.num_epochs = 10
         self.learning_rate = 0.0001
         self.warmup_steps = 4000
 
         # Data
         self.max_seq_length = 100
         self.vocab_size = 32000
+        self.tokenizer_file = "artifacts/tokenizers/en_de_tokenizer.json"
 
         # Positional encoding
         self.use_positional_encoding = True
@@ -47,6 +55,8 @@ class ExperimentConfig:
         return {
             "d_model": self.d_model,
             "n_heads": self.n_heads,
+            "max_len": self.max_len,
+            "vocab_size": self.vocab_size,
             "d_ff": self.d_ff, 
             "n_layers": self.n_layers,
             "dropout": self.dropout,
@@ -80,20 +90,34 @@ class Criterion(nn.Module):
         super(Criterion, self).__init__()
         self.criterion = nn.CrossEntropyLoss()
 
-    def forward(self, output, target):
-        return self.criterion(output, target)
+    def forward(self, logits, target):
+        """
+        logits: [batch, seq_len, vocab_size]
+        target: [batch, seq_len]
+        """
+        return self.criterion(logits.view(-1, logits.size(-1)), target.view(-1))
 
 
 class Model(nn.Module):
     def __init__(self, config: ExperimentConfig):
         super(Model, self).__init__()
         self.config = config
+        self.device = get_device()
+
+        self.embedding = nn.Embedding(config.vocab_size, config.d_model)
         self.encoder = TransformerEncoder(**config.get_model_params())
         self.decoder = TransformerDecoder(**config.get_model_params())
         
         self.linear = nn.Linear(config.d_model, config.vocab_size)
 
-    def forward(self, src, tgt):
+    def forward(self, batch):
+        # Extract source and target from the batch
+        src = batch['src']['input_ids']
+        tgt = batch['tgt']['input_ids']
+        
+        src = self.embedding(src)
+        tgt = self.embedding(tgt)
+        
         if self.config.use_positional_encoding:
             src = src + get_positional_encoding(self.config.d_model, src.size(1))
             tgt = tgt + get_positional_encoding(self.config.d_model, tgt.size(1))
@@ -107,9 +131,36 @@ def get_device():
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
+def get_tokenizer(config: ExperimentConfig):
+    special_tokens = {
+        "pad_token": "[PAD]",
+        "bos_token": "[BOS]",
+        "eos_token": "[EOS]",
+        "unk_token": "[UNK]",
+        "sep_token": "[SEP]",
+        "mask_token": "[MASK]"
+    }
+    tokenizer = PreTrainedTokenizerFast(
+        tokenizer_file=config.tokenizer_file,
+        model_max_length=config.max_seq_length,
+    )
+    tokenizer.add_special_tokens(special_tokens)
+    return tokenizer
+
+
 def base_experiment(config: ExperimentConfig):
     device = get_device()
-    data_loaders = get_data_loaders("translation", config.batch_size)
+    tokenizer = get_tokenizer(config)
+    collate_fn = TranslationDataCollator(
+        tokenizer=tokenizer,
+        max_length=config.max_seq_length,
+        device=device
+    )
+    data_loaders = get_data_loaders(
+        "translation",
+        config.batch_size,
+        collate_fn
+    )
     model = Model(config)
     criterion = Criterion()
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)

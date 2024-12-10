@@ -1,5 +1,8 @@
 from datasets import load_dataset
 from torch.utils.data import DataLoader
+from .collate import TranslationDataCollator
+from transformers import PreTrainedTokenizer
+from typing import Dict, Callable
 
 
 def load_translation_dataset():
@@ -30,11 +33,44 @@ def get_dataset(dataset_name: str):
     else:
         raise ValueError(f"Invalid dataset name: {dataset_name}")
 
-def get_data_loaders(dataset_name: str, batch_size: int):
+def get_data_loaders(
+    dataset_name: str,
+    batch_size: int,
+    collate_fn: Callable
+) -> Dict[str, DataLoader]:
+    """
+    Create data loaders with the translation collator.
+    
+    Args:
+        dataset_name: Name of the dataset to load
+        tokenizer: Tokenizer to use for encoding texts
+        batch_size: Batch size for the data loaders
+        max_length: Maximum sequence length
+        device: Device to place tensors on
+        
+    Returns:
+        Dictionary containing train and validation data loaders
+    """
     dataset = get_dataset(dataset_name)
-    train_loader = DataLoader(dataset["train"], batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(dataset["validation"], batch_size=batch_size, shuffle=False)
-    return train_loader, val_loader
+    
+    train_loader = DataLoader(
+        dataset['train'],
+        batch_size=batch_size,
+        shuffle=True,
+        collate_fn=collate_fn
+    )
+    
+    val_loader = DataLoader(
+        dataset['validation'],
+        batch_size=batch_size,
+        shuffle=False,
+        collate_fn=collate_fn
+    )
+    
+    return {
+        "train": train_loader,
+        "val": val_loader
+    }
 
 
 if __name__ == "__main__":
