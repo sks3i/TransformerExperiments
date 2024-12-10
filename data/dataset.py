@@ -1,4 +1,6 @@
 from datasets import load_dataset
+from torch.utils.data import DataLoader
+
 
 def load_translation_dataset():
     # Load English-German translation dataset from WMT14
@@ -19,6 +21,21 @@ def get_datasets():
         "translation": translation_data,
         "summarization": summarization_data
     }
+
+def get_dataset(dataset_name: str):
+    if dataset_name == "translation":
+        return load_translation_dataset()
+    elif dataset_name == "summarization":
+        return load_summarization_dataset()
+    else:
+        raise ValueError(f"Invalid dataset name: {dataset_name}")
+
+def get_data_loaders(dataset_name: str, batch_size: int):
+    dataset = get_dataset(dataset_name)
+    train_loader = DataLoader(dataset["train"], batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(dataset["validation"], batch_size=batch_size, shuffle=False)
+    return train_loader, val_loader
+
 
 if __name__ == "__main__":
     # Test loading the datasets
