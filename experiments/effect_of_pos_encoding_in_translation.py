@@ -22,7 +22,7 @@ from transformers import PreTrainedTokenizerFast
 
 
 class ExperimentConfig:
-    def __init__(self):
+    def __init__(self, experiment_name: str):
         # Model architecture
         self.d_model = 512
         self.n_heads = 8 
@@ -33,7 +33,7 @@ class ExperimentConfig:
 
         # Training
         self.batch_size = 136
-        self.num_epochs = 10
+        self.num_epochs = 2
         self.learning_rate = 0.0001
         self.warmup_steps = 4000
 
@@ -47,7 +47,8 @@ class ExperimentConfig:
         self.max_len = 5000
 
         # Logging
-        self.log_dir = "logs/translation_pos_encoding"
+        self.experiment_name = experiment_name
+        self.log_dir = f"logs/translation_pos_encoding/{self.experiment_name}"
         self.save_dir = "checkpoints/translation_pos_encoding"
         self.log_interval = 100
 
@@ -169,13 +170,13 @@ def base_experiment(config: ExperimentConfig):
 
 
 def positional_encoding_experiment():
-    config = ExperimentConfig()
+    config = ExperimentConfig(experiment_name="positional_encoding")
     trainer, data_loaders = base_experiment(config)
     trainer.train(data_loaders["train"], data_loaders["val"], config.num_epochs)
 
 
 def no_positional_encoding_experiment():
-    config = ExperimentConfig()
+    config = ExperimentConfig(experiment_name="no_positional_encoding")
     config.use_positional_encoding = False
     trainer, data_loaders = base_experiment(config)
     trainer.train(data_loaders["train"], data_loaders["val"], config.num_epochs)
@@ -187,6 +188,8 @@ if __name__ == "__main__":
     args = args.parse_args()
 
     if args.use_positional_encoding:
+        print("Using positional encoding")
         positional_encoding_experiment()
     else:
+        print("Not using positional encoding")
         no_positional_encoding_experiment()
