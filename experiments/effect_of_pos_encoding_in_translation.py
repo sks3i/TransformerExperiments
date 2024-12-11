@@ -73,16 +73,27 @@ class ExperimentConfig:
         }
 
 
-def get_positional_encoding(d_model, max_len):
+def get_positional_encoding(d_model, max_len, batch_size=None):
     """
-    Get positional encoding for the input sequence. 
+    Get positional encoding for the input sequence.
+    Args:
+        d_model: dimension of the model
+        max_len: maximum sequence length
+        batch_size: batch size (optional)
+    Returns:
+        Tensor of shape (batch_size, max_len, d_model) if batch_size is provided
+        else (max_len, d_model)
     """
     pe = torch.zeros(max_len, d_model)
     position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
     div_term = torch.exp(torch.arange(0, d_model, 2).float() * -(math.log(10000.0) / d_model))
     pe[:, 0::2] = torch.sin(position * div_term)
     pe[:, 1::2] = torch.cos(position * div_term)
-    pe = pe.unsqueeze(0).transpose(0, 1)
+    
+    if batch_size is not None:
+        # Add batch dimension and rearrange to (batch_size, max_len, d_model)
+        pe = pe.unsqueeze(0).expand(batch_size, -1, -1)
+    
     return pe
 
 
@@ -120,8 +131,20 @@ class Model(nn.Module):
         tgt = self.embedding(tgt)
         
         if self.config.use_positional_encoding:
-            src = src + get_positional_encoding(self.config.d_model, src.size(1))
-            tgt = tgt + get_positional_encoding(self.config.d_model, tgt.size(1))
+            # Get positional encodings with correct batch size and sequence length
+            src_pos = get_positional_encoding(
+                self.config.d_model, 
+                src.size(1), 
+                batch_size=src.size(0)
+            ).to(src.device)
+            tgt_pos = get_positional_encoding(
+                self.config.d_model, 
+                tgt.size(1), 
+                batch_size=tgt.size(0)
+            ).to(tgt.device)
+            
+            src = src + src_pos
+            tgt = tgt + tgt_pos
         
         memory = self.encoder(src)
         output = self.decoder(tgt, memory)
@@ -169,7 +192,7 @@ def base_experiment(config: ExperimentConfig):
     return trainer, data_loaders
 
 
-def positional_encoding_experiment():
+def positional_encoding_experiment():   
     config = ExperimentConfig(experiment_name="positional_encoding")
     trainer, data_loaders = base_experiment(config)
     trainer.train(data_loaders["train"], data_loaders["val"], config.num_epochs)
