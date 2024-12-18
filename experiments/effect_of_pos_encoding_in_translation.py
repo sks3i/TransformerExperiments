@@ -32,7 +32,7 @@ class ExperimentConfig:
         self.norm_order = "post"
 
         # Training
-        self.batch_size = 136
+        self.batch_size = 144
         self.num_epochs = 2
         self.learning_rate = 0.0001
         self.warmup_steps = 4000
@@ -49,7 +49,7 @@ class ExperimentConfig:
         # Logging
         self.experiment_name = experiment_name
         self.log_dir = f"logs/translation_pos_encoding/{self.experiment_name}"
-        self.save_dir = "checkpoints/translation_pos_encoding"
+        self.save_dir = "artifacts/checkpoints/translation_pos_encoding"
         self.log_interval = 100
 
     def get_model_params(self):
@@ -188,7 +188,7 @@ def base_experiment(config: ExperimentConfig):
     model = Model(config)
     criterion = Criterion()
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
-    trainer = Trainer(model, optimizer, criterion, device, config.log_dir)
+    trainer = Trainer(model, optimizer, criterion, device, config.log_dir, config.save_dir)
     return trainer, data_loaders
 
 
